@@ -1,0 +1,8 @@
+{
+  "name": "Remix Clockander - Moto Edge+ Glassmorphic Calendar \u0026 Keep Widget",
+  "description": "Simple, Customizable glassmorphic clock and calendar widget inspired by Motorola,Google Calendar, Google Keep quick tasks, and Gemini AI scheduling.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
