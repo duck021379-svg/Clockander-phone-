@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { WidgetSettings } from '../types';
 import {
   X,
@@ -11,10 +11,14 @@ import {
   Calendar,
   Lock,
   Unlock,
-  RotateCcw,
   Sparkles,
+  CloudSun,
+  MapPin,
+  Image as ImageIcon,
+  Upload,
 } from 'lucide-react';
 import { soundManager } from '../utils/audio';
+import { POPULAR_LOCATIONS } from '../services/weatherService';
 
 interface CustomizeDrawerProps {
   isOpen: boolean;
@@ -24,6 +28,7 @@ interface CustomizeDrawerProps {
   onDataReload?: () => void;
   onOpenReminderModal?: () => void;
   onOpenCalendarShade?: () => void;
+  onOpenWeatherModal?: () => void;
 }
 
 export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
@@ -34,7 +39,10 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
   onDataReload,
   onOpenReminderModal,
   onOpenCalendarShade,
+  onOpenWeatherModal,
 }) => {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   if (!isOpen) return null;
 
   const update = (partial: Partial<WidgetSettings>) => {
@@ -56,6 +64,23 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
       is24Hour: false,
       showSeconds: false,
     });
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        update({
+          wallpaper: 'custom',
+          customWallpaperUrl: dataUrl,
+        });
+        if (settings.hapticsEnabled) soundManager.playSuccess();
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -315,7 +340,144 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
             </div>
           </div>
 
-          {/* 5. QUICK CALENDAR & REMINDER ACTIONS */}
+          {/* 5. MOTO GLANCE WEATHER & RADAR */}
+          <div className="flex flex-col gap-2.5 p-3.5 rounded-2xl bg-white/5 border border-white/10">
+            <div className="flex items-center justify-between text-white font-semibold">
+              <span className="flex items-center gap-1.5">
+                <CloudSun className="w-4 h-4 text-amber-400" />
+                <span>Moto Glance Weather</span>
+              </span>
+              <button
+                onClick={() => {
+                  if (settings.hapticsEnabled) soundManager.playClick();
+                  if (onOpenWeatherModal) onOpenWeatherModal();
+                  onClose();
+                }}
+                className="px-2.5 py-1 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/40 text-cyan-300 font-bold text-[11px] transition-colors cursor-pointer"
+              >
+                Open Radar & Glance
+              </button>
+            </div>
+
+            {/* Temperature Unit Toggle */}
+            <div className="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/10">
+              <span className="text-slate-300">Temperature Unit</span>
+              <div className="flex gap-1">
+                {(['F', 'C'] as const).map((unit) => (
+                  <button
+                    key={unit}
+                    onClick={() => update({ tempUnit: unit })}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                      (settings.tempUnit || 'F') === unit
+                        ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                        : 'bg-white/10 text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    °{unit}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick City Presets */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11px] text-slate-400">Quick City Preset:</span>
+              <div className="flex flex-wrap gap-1">
+                {POPULAR_LOCATIONS.slice(0, 5).map((loc) => {
+                  const isSel = (settings.weatherCity || 'Chicago').toLowerCase() === loc.name.toLowerCase();
+                  return (
+                    <button
+                      key={loc.name}
+                      onClick={() => {
+                        update({
+                          weatherCity: loc.name,
+                          weatherLat: loc.lat,
+                          weatherLon: loc.lon,
+                        });
+                      }}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-medium border transition-colors cursor-pointer ${
+                        isSel
+                          ? 'bg-cyan-500/20 border-cyan-400 text-white font-bold'
+                          : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {loc.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* 6. MOTOROLA EDGE+ WALLPAPERS & GOOGLE DRIVE / PHOTOS */}
+          <div className="flex flex-col gap-2.5 p-3.5 rounded-2xl bg-white/5 border border-white/10">
+            <div className="text-white font-semibold flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <ImageIcon className="w-4 h-4 text-cyan-400" />
+                <span>Wallpapers & Media</span>
+              </span>
+              <span className="text-[10px] text-cyan-300">Moto Edge+ 144Hz OLED</span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                { id: 'cyan-nebula', label: 'Cyan Nebula' },
+                { id: 'obsidian', label: 'Obsidian OLED' },
+                { id: 'aurora', label: 'Aurora Edge' },
+                { id: 'cyber-sunset', label: 'Cyber Sunset' },
+                { id: 'frost-crystal', label: 'Frost Crystal' },
+                { id: 'custom', label: 'Custom / Drive' },
+              ].map((wp) => (
+                <button
+                  key={wp.id}
+                  onClick={() => update({ wallpaper: wp.id as any })}
+                  className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                    settings.wallpaper === wp.id
+                      ? 'bg-cyan-500/20 border-cyan-400 text-white font-bold ring-1 ring-cyan-400/40'
+                      : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span className="text-[11px] truncate block">{wp.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Custom / Drive / Photos Wallpaper Upload or URL input */}
+            <div className="flex flex-col gap-1.5 pt-1">
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  placeholder="Paste Google Drive/Photos or Image URL..."
+                  value={settings.customWallpaperUrl || ''}
+                  onChange={(e) =>
+                    update({
+                      wallpaper: 'custom',
+                      customWallpaperUrl: e.target.value,
+                    })
+                  }
+                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-white flex items-center gap-1 text-[11px] font-semibold cursor-pointer"
+                  title="Upload local photo or screenshot from your device"
+                >
+                  <Upload className="w-3 h-3 text-cyan-400" />
+                  <span>Photo</span>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 7. QUICK CALENDAR & REMINDER ACTIONS */}
           <div className="flex flex-col gap-2 p-3.5 rounded-2xl bg-white/5 border border-white/10">
             <div className="text-white font-semibold flex items-center gap-1.5">
               <Calendar className="w-4 h-4 text-cyan-400" />

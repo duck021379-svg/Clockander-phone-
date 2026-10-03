@@ -1,29 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { CalendarEvent, WidgetSettings } from '../types';
+import { CalendarEvent, WidgetSettings, WeatherData } from '../types';
 import { PrecisionClockEngine } from '../utils/clock';
 import { soundManager } from '../utils/audio';
 import { Calendar, Plus, ExternalLink, X, Check } from 'lucide-react';
+import { WeatherIcon } from './WeatherIcon';
 
 interface SimpleWidgetProps {
   settings: WidgetSettings;
   events: CalendarEvent[];
   selectedDate: string;
+  weather?: WeatherData;
   onOpenSettings: () => void;
   onToggleLock: () => void;
   onOpenReminderEntry: () => void;
   onEventClick?: (event: CalendarEvent) => void;
   onQuickAddReminder?: (title: string, time: string, isStarred: boolean) => void;
+  onOpenWeather?: () => void;
 }
 
 export const SimpleWidget: React.FC<SimpleWidgetProps> = ({
   settings,
   events,
   selectedDate,
+  weather,
   onOpenSettings,
   onToggleLock,
   onOpenReminderEntry,
   onEventClick,
   onQuickAddReminder,
+  onOpenWeather,
 }) => {
   const [time, setTime] = useState<Date>(new Date());
   const [isInlineEntryOpen, setIsInlineEntryOpen] = useState(false);
@@ -175,6 +180,29 @@ export const SimpleWidget: React.FC<SimpleWidgetProps> = ({
             <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-80 transition-opacity" />
           </div>
         )}
+
+        {/* Real-time Weather Glance Pill (Click to open full Moto Weather Glance) */}
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            if (settings.hapticsEnabled) soundManager.playClick();
+            if (onOpenWeather) onOpenWeather();
+          }}
+          className="text-lg sm:text-xl font-bold tracking-tight cursor-pointer hover:opacity-100 transition-opacity flex items-center gap-2 mt-1 w-fit"
+          style={textCustomStyle}
+          title="Click to view full Moto Weather Glance"
+        >
+          <WeatherIcon
+            weatherCode={weather?.weatherCode ?? 2}
+            condition={weather?.condition ?? settings.weatherCondition}
+            isDay={weather?.isDay ?? true}
+            className="w-4 h-4"
+          />
+          <span>
+            {weather ? weather.temp : settings.weatherTemp}°{weather?.tempUnit || settings.tempUnit || 'F'} • {weather ? weather.condition : settings.weatherCondition}
+          </span>
+          <span className="text-xs opacity-75">({weather?.city || settings.weatherCity || 'Chicago'})</span>
+        </div>
       </div>
 
       {/* Middle Section: Due Entries (e.g. Pdv101-9pm*, Psy-11:59pm) */}

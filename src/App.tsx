@@ -27,6 +27,13 @@ import { DesignReferenceModal } from './components/DesignReferenceModal';
 import { SetReminderModal } from './components/SetReminderModal';
 import { QuickCalendarShade } from './components/QuickCalendarShade';
 import { SimpleWidget } from './components/SimpleWidget';
+import { MotoWeatherModal } from './components/MotoWeatherModal';
+import { WeatherData } from './types';
+import {
+  getInitialWeather,
+  fetchLiveWeather,
+  generateMockWeatherData,
+} from './services/weatherService';
 import {
   fetchGoogleCalendarEvents,
   deleteGoogleCalendarEvent,
@@ -66,6 +73,90 @@ export default function App() {
   const [isSetReminderOpen, setIsSetReminderOpen] = useState(false);
   const [isShadeOpen, setIsShadeOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isWeatherModalOpen, setIsWeatherModalOpen] = useState(false);
+  const [isWeatherLoading, setIsWeatherLoading] = useState(false);
+
+  // Real-time Moto Weather State
+  const [weather, setWeather] = useState<WeatherData>(() =>
+    getInitialWeather(settings.tempUnit || 'F')
+  );
+
+  // Real-time weather fetch handler with automatic fallback
+  const handleRefreshWeather = useCallback(async () => {
+    if (settings.weatherCustomOverride) {
+      return;
+    }
+    setIsWeatherLoading(true);
+    try {
+      const lat = settings.weatherLat ?? 41.8781;
+      const lon = settings.weatherLon ?? -87.6298;
+      const city = settings.weatherCity || 'Chicago';
+      const unit = settings.tempUnit || 'F';
+      const liveData = await fetchLiveWeather({ lat, lon, cityName: city, tempUnit: unit });
+      setWeather(liveData);
+      setSettings((s) => ({
+        ...s,
+        weatherTemp: liveData.temp,
+        weatherCondition: liveData.condition,
+      }));
+    } catch (err) {
+      console.warn('Live weather fetch failed, using realistic fallback:', err);
+      const fallback = generateMockWeatherData(
+        settings.weatherCity || 'Chicago',
+        settings.tempUnit || 'F'
+      );
+      setWeather(fallback);
+    } finally {
+      setIsWeatherLoading(false);
+    }
+  }, [
+    settings.weatherLat,
+    settings.weatherLon,
+    settings.weatherCity,
+    settings.tempUnit,
+    settings.weatherCustomOverride,
+  ]);
+
+  // Periodic weather refresh (every 15 minutes)
+  useEffect(() => {
+    handleRefreshWeather();
+    const interval = setInterval(handleRefreshWeather, 15 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [handleRefreshWeather]);
+
+  const handleSelectWeatherLocation = (preset: { name: string; lat: number; lon: number }) => {
+    setSettings((s) => ({
+      ...s,
+      weatherCity: preset.name,
+      weatherLat: preset.lat,
+      weatherLon: preset.lon,
+      weatherCustomOverride: false,
+    }));
+  };
+
+  const handleToggleTempUnit = () => {
+    const nextUnit = (settings.tempUnit || 'F') === 'F' ? 'C' : 'F';
+    setSettings((s) => ({ ...s, tempUnit: nextUnit }));
+  };
+
+  const handleUpdateCustomWeather = (temp: number, condition: string) => {
+    setWeather((prev) => ({
+      ...prev,
+      temp,
+      condition,
+      isLive: false,
+    }));
+    setSettings((s) => ({
+      ...s,
+      weatherTemp: temp,
+      weatherCondition: condition,
+      weatherCustomOverride: true,
+    }));
+  };
+
+  const handleToggleCustomOverride = (enabled: boolean) => {
+    setSettings((s) => ({ ...s, weatherCustomOverride: enabled }));
+  };
 
   // Shortcut for Windows 11 Win + N equivalent on phone (notification & calendar panel)
   useEffect(() => {
@@ -358,10 +449,12 @@ export default function App() {
             settings={settings}
             events={events}
             selectedDate={selectedDate}
+            weather={weather}
             onOpenSettings={() => setIsCustomizerOpen(true)}
             onToggleLock={handleToggleLock}
             onOpenReminderEntry={() => setIsSetReminderOpen(true)}
             onEventClick={() => setIsShadeOpen(true)}
+            onOpenWeather={() => setIsWeatherModalOpen(true)}
             onQuickAddReminder={(title, time, isStarred) => {
               handleAddEvent({
                 title,
@@ -394,6 +487,19 @@ export default function App() {
 
           {/* Header Action Buttons */}
           <div className="flex items-center gap-1.5">
+            {/* Live Weather Glance Pill Button */}
+            <button
+              onClick={() => {
+                if (settings.hapticsEnabled) soundManager.playClick();
+                setIsWeatherModalOpen(true);
+              }}
+              title="Open Moto Glance Live Weather & Radar"
+              className="p-1.5 px-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/30 text-amber-300 flex items-center gap-1 text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm"
+            >
+              <span>{weather.temp}°</span>
+              <span className="text-[10px] opacity-80">{weather.tempUnit}</span>
+            </button>
+
             {/* Quick Calendar Shade (Win + N Shortcut) */}
             <button
               onClick={() => {
@@ -472,9 +578,11 @@ export default function App() {
           <ClockWidget
             settings={settings}
             events={events.filter((e) => e.date === selectedDate || e.isStarred)}
+            weather={weather}
             onStyleToggle={handleClockStyleToggle}
             onOpenSettings={() => setIsCustomizerOpen(true)}
             onSetReminder={() => setIsSetReminderOpen(true)}
+            onOpenWeather={() => setIsWeatherModalOpen(true)}
           />
         </div>
 
@@ -618,11 +726,26 @@ export default function App() {
         onUpdateSettings={setSettings}
         onOpenReminderModal={() => setIsSetReminderOpen(true)}
         onOpenCalendarShade={() => setIsShadeOpen(true)}
+        onOpenWeatherModal={() => setIsWeatherModalOpen(true)}
         onDataReload={() => {
           setSettings(loadSettings());
           setEvents(loadEvents());
           setKeepNotes(loadKeepNotes());
         }}
+      />
+
+      {/* Real-Time Moto Glance Weather & Radar Modal */}
+      <MotoWeatherModal
+        isOpen={isWeatherModalOpen}
+        onClose={() => setIsWeatherModalOpen(false)}
+        weather={weather}
+        settings={settings}
+        onRefresh={handleRefreshWeather}
+        isLoading={isWeatherLoading}
+        onSelectLocation={handleSelectWeatherLocation}
+        onToggleTempUnit={handleToggleTempUnit}
+        onUpdateCustomWeather={handleUpdateCustomWeather}
+        onToggleCustomOverride={handleToggleCustomOverride}
       />
 
       {/* Required Confirmation Modal for Destructive Data Changes */}

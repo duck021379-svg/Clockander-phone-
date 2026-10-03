@@ -1,24 +1,29 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { WidgetSettings, CalendarEvent } from '../types';
+import { WidgetSettings, CalendarEvent, WeatherData } from '../types';
 import { PrecisionClockEngine, computeClockAngles } from '../utils/clock';
-import { CloudSun, BatteryCharging, Zap, Settings, BellPlus } from 'lucide-react';
+import { BatteryCharging, Zap, Settings, BellPlus, MapPin } from 'lucide-react';
 import { MONTH_NAMES, WEEKDAY_NAMES_SUN } from '../utils/calendar';
 import { soundManager } from '../utils/audio';
+import { WeatherIcon } from './WeatherIcon';
 
 interface ClockWidgetProps {
   settings: WidgetSettings;
   events?: CalendarEvent[];
+  weather?: WeatherData;
   onStyleToggle?: () => void;
   onOpenSettings?: () => void;
   onSetReminder?: () => void;
+  onOpenWeather?: () => void;
 }
 
 export const ClockWidget: React.FC<ClockWidgetProps> = ({
   settings,
   events = [],
+  weather,
   onStyleToggle,
   onOpenSettings,
   onSetReminder,
+  onOpenWeather,
 }) => {
   const [time, setTime] = useState<Date>(new Date());
   const [angles, setAngles] = useState({ hourAngle: 0, minuteAngle: 0, secondAngle: 0 });
@@ -73,6 +78,14 @@ export const ClockWidget: React.FC<ClockWidgetProps> = ({
   const conciseDateLine = `${monthShort}.${dayOfMonth}/${weekdayShort}`;
   const conciseTimeLine = `${hoursFormatted}:${minutesFormatted}${ampm}`;
 
+  // Weather data extraction
+  const currentTemp = weather ? weather.temp : settings.weatherTemp;
+  const currentUnit = weather ? weather.tempUnit : (settings.tempUnit || 'F');
+  const currentCondition = weather ? weather.condition : settings.weatherCondition;
+  const currentCity = weather?.city || settings.weatherCity || 'Chicago';
+  const weatherCode = weather?.weatherCode ?? 2;
+  const isDay = weather?.isDay ?? true;
+
   // Font family class resolver
   const getFontFamilyClass = () => {
     switch (settings.fontFamily) {
@@ -95,19 +108,10 @@ export const ClockWidget: React.FC<ClockWidgetProps> = ({
     opacity: settings.textOpacity ?? 0.88,
   };
 
-  // Battery & weather from settings or simulated
   const batteryPct = settings.batteryLevel;
-  const tempF = settings.weatherTemp;
 
   // Render STYLE 1: User's Requested "Translucent Text Glance"
-  // Example:
-  // Oct.11/Tues
-  // 10:00pm
-  // Pdv101-9pm
-  // Psy-11:59pm*
-  // Setting      set reminder
   if (settings.clockStyle === 'text-glance') {
-    // Format upcoming events for the date
     const displayEvents = events.slice(0, 3);
 
     const formatEventTime = (timeStr: string) => {
@@ -153,6 +157,22 @@ export const ClockWidget: React.FC<ClockWidgetProps> = ({
               :{secondsFormatted}
             </span>
           )}
+        </div>
+
+        {/* Real-time Weather Glance Line */}
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            if (settings.hapticsEnabled) soundManager.playClick();
+            if (onOpenWeather) onOpenWeather();
+          }}
+          className="flex items-center gap-2 text-sm sm:text-base font-semibold cursor-pointer hover:opacity-100 transition-opacity w-fit py-0.5"
+          style={textCustomStyle}
+          title="Click to view full Moto Weather Glance & Radar"
+        >
+          <WeatherIcon weatherCode={weatherCode} condition={currentCondition} isDay={isDay} className="w-4 h-4" />
+          <span>{currentTemp}°{currentUnit} • {currentCondition}</span>
+          <span className="opacity-70 text-xs">({currentCity})</span>
         </div>
 
         {/* Event Lines: e.g. Pdv101-9pm, Psy-11:59pm* */}
@@ -216,13 +236,15 @@ export const ClockWidget: React.FC<ClockWidgetProps> = ({
 
     return (
       <div
-        onClick={onStyleToggle}
-        className="relative group cursor-pointer p-4 rounded-3xl transition-transform active:scale-[0.98]"
-        title="Click to toggle clock style"
+        className="relative group p-4 rounded-3xl transition-transform active:scale-[0.98]"
       >
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           {/* Main Dial */}
-          <div className="relative w-36 h-36 flex items-center justify-center shrink-0">
+          <div
+            onClick={onStyleToggle}
+            title="Click to toggle clock style"
+            className="relative w-36 h-36 flex items-center justify-center shrink-0 cursor-pointer"
+          >
             {/* Outer Glow Ring */}
             <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
               <circle
@@ -278,9 +300,13 @@ export const ClockWidget: React.FC<ClockWidgetProps> = ({
           </div>
 
           {/* Moto Glance Metadata Column */}
-          <div className="flex flex-col justify-center gap-2 text-left">
+          <div className="flex flex-col justify-center gap-2 text-left w-full sm:w-auto">
             <div className="flex items-center gap-2">
-              <div className="px-2.5 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-xs font-semibold flex items-center gap-1.5">
+              <div
+                onClick={onStyleToggle}
+                className="px-2.5 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-xs font-semibold flex items-center gap-1.5 cursor-pointer hover:bg-cyan-500/25 transition-colors"
+                title="Click to toggle clock style"
+              >
                 <Zap className="w-3 h-3 text-cyan-400" />
                 <span>Moto Glance</span>
               </div>
@@ -294,9 +320,30 @@ export const ClockWidget: React.FC<ClockWidgetProps> = ({
               {weekday}, {monthName} {dayOfMonth}
             </div>
 
-            <div className="flex items-center gap-2 text-xs text-slate-300">
-              <CloudSun className="w-4 h-4 text-amber-400" />
-              <span>{tempF}°F • {settings.weatherCondition}</span>
+            {/* Interactive Real-Time Weather Pill */}
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                if (settings.hapticsEnabled) soundManager.playClick();
+                if (onOpenWeather) onOpenWeather();
+              }}
+              className="px-3 py-1.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer flex flex-col gap-0.5 group shadow-sm"
+              title="Click to view full Moto Weather Glance & Radar"
+            >
+              <div className="flex items-center gap-2 text-xs">
+                <WeatherIcon weatherCode={weatherCode} condition={currentCondition} isDay={isDay} className="w-4 h-4" />
+                <span className="font-extrabold text-white">{currentTemp}°{currentUnit}</span>
+                <span className="text-slate-300 font-medium">• {currentCondition}</span>
+              </div>
+              {weather && (
+                <div className="flex items-center justify-between text-[10px] text-slate-400 pl-6">
+                  <span>H:{weather.tempHigh}° L:{weather.tempLow}°</span>
+                  <span className="text-cyan-300 flex items-center gap-0.5 font-medium">
+                    <MapPin className="w-2.5 h-2.5" />
+                    <span>{currentCity}</span>
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
@@ -313,11 +360,13 @@ export const ClockWidget: React.FC<ClockWidgetProps> = ({
   if (settings.clockStyle === 'digital') {
     return (
       <div
-        onClick={onStyleToggle}
-        className="group cursor-pointer p-4 rounded-3xl transition-transform active:scale-[0.98]"
-        title="Click to toggle clock style"
+        className="group p-4 rounded-3xl transition-transform active:scale-[0.98]"
       >
-        <div className="flex items-baseline justify-between gap-2">
+        <div
+          onClick={onStyleToggle}
+          title="Click to toggle clock style"
+          className="flex items-baseline justify-between gap-2 cursor-pointer"
+        >
           <div
             className={`flex items-baseline font-extrabold text-5xl sm:text-6xl tracking-tight ${getFontFamilyClass()}`}
             style={textCustomStyle}
@@ -339,13 +388,28 @@ export const ClockWidget: React.FC<ClockWidgetProps> = ({
         </div>
 
         <div className="mt-2 flex items-center justify-between text-xs text-slate-300">
-          <span className="font-medium" style={textCustomStyle}>
+          <span
+            onClick={onStyleToggle}
+            className="font-medium cursor-pointer"
+            style={textCustomStyle}
+          >
             {weekday}, {monthName} {dayOfMonth}
           </span>
-          <span className="flex items-center gap-1.5 text-amber-300">
-            <CloudSun className="w-3.5 h-3.5" />
-            {tempF}°F {settings.weatherCondition}
-          </span>
+
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              if (settings.hapticsEnabled) soundManager.playClick();
+              if (onOpenWeather) onOpenWeather();
+            }}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-amber-300 cursor-pointer transition-colors shadow-sm"
+            title="Click to view full Moto Weather Glance"
+          >
+            <WeatherIcon weatherCode={weatherCode} condition={currentCondition} isDay={isDay} className="w-3.5 h-3.5" />
+            <span className="font-bold text-white">{currentTemp}°{currentUnit}</span>
+            <span className="text-slate-300 text-[11px] truncate max-w-[90px]">{currentCondition}</span>
+            <span className="text-[10px] text-cyan-300">• {currentCity}</span>
+          </div>
         </div>
       </div>
     );
@@ -355,11 +419,13 @@ export const ClockWidget: React.FC<ClockWidgetProps> = ({
   if (settings.clockStyle === 'analog') {
     return (
       <div
-        onClick={onStyleToggle}
-        className="group cursor-pointer p-3 rounded-3xl flex flex-col items-center justify-center transition-transform active:scale-[0.98]"
-        title="Click to toggle clock style"
+        className="group p-3 rounded-3xl flex flex-col items-center justify-center transition-transform active:scale-[0.98]"
       >
-        <div className="relative w-40 h-40 rounded-full border border-white/20 bg-slate-900/60 shadow-inner flex items-center justify-center">
+        <div
+          onClick={onStyleToggle}
+          title="Click to toggle clock style"
+          className="relative w-40 h-40 rounded-full border border-white/20 bg-slate-900/60 shadow-inner flex items-center justify-center cursor-pointer"
+        >
           {[...Array(12)].map((_, i) => (
             <div
               key={i}
@@ -405,12 +471,27 @@ export const ClockWidget: React.FC<ClockWidgetProps> = ({
           <div className="absolute w-3 h-3 rounded-full bg-cyan-400 border-2 border-slate-900 shadow-md z-10" />
         </div>
 
-        <div className="mt-3 text-center">
+        <div className="mt-3 text-center flex flex-col items-center gap-1">
           <div className="text-xs font-semibold" style={textCustomStyle}>
             {weekday}, {monthName} {dayOfMonth}
           </div>
           <div className="text-[11px] text-cyan-300 font-mono">
             {hoursFormatted}:{minutesFormatted} {ampm.toUpperCase()}
+          </div>
+
+          {/* Real-time Weather Sub-Pill */}
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              if (settings.hapticsEnabled) soundManager.playClick();
+              if (onOpenWeather) onOpenWeather();
+            }}
+            className="mt-1 px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
+            title="Click to view full Moto Weather Glance"
+          >
+            <WeatherIcon weatherCode={weatherCode} condition={currentCondition} isDay={isDay} className="w-3.5 h-3.5" />
+            <span className="font-bold text-white">{currentTemp}°{currentUnit}</span>
+            <span className="text-[10px] text-slate-300 truncate max-w-[100px]">{currentCondition}</span>
           </div>
         </div>
       </div>
@@ -420,27 +501,45 @@ export const ClockWidget: React.FC<ClockWidgetProps> = ({
   // Render STYLE 5: Material You Dual-Stack (Android 12/13/14)
   return (
     <div
-      onClick={onStyleToggle}
-      className="group cursor-pointer p-4 rounded-3xl flex items-center justify-between transition-transform active:scale-[0.98]"
-      title="Click to toggle clock style"
+      className="group p-4 rounded-3xl flex items-center justify-between transition-transform active:scale-[0.98]"
     >
-      <div className="flex flex-col leading-none font-['Outfit'] font-black text-4xl sm:text-5xl tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-cyan-200 via-teal-300 to-blue-400">
+      <div
+        onClick={onStyleToggle}
+        title="Click to toggle clock style"
+        className="flex flex-col leading-none font-['Outfit'] font-black text-4xl sm:text-5xl tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-cyan-200 via-teal-300 to-blue-400 cursor-pointer"
+      >
         <div>{hoursFormatted}</div>
         <div className="text-white/80">{minutesFormatted}</div>
       </div>
 
       <div className="flex flex-col items-end gap-1.5 text-right">
-        <div className="px-3 py-1 rounded-2xl bg-cyan-400/20 text-cyan-200 font-semibold text-xs border border-cyan-400/30">
+        <div
+          onClick={onStyleToggle}
+          className="px-3 py-1 rounded-2xl bg-cyan-400/20 text-cyan-200 font-semibold text-xs border border-cyan-400/30 cursor-pointer hover:bg-cyan-400/30 transition-colors"
+          title="Click to toggle clock style"
+        >
           Material You
         </div>
         <div className="text-sm font-semibold" style={textCustomStyle}>
           {weekday}, {monthName} {dayOfMonth}
         </div>
-        <div className="text-xs text-slate-300 flex items-center gap-1">
-          <CloudSun className="w-3.5 h-3.5 text-amber-300" />
-          <span>{tempF}°F</span>
+
+        {/* Real-Time Weather Chip */}
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            if (settings.hapticsEnabled) soundManager.playClick();
+            if (onOpenWeather) onOpenWeather();
+          }}
+          className="px-2.5 py-1 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-xs text-slate-200 flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
+          title="Click to view full Moto Weather Glance"
+        >
+          <WeatherIcon weatherCode={weatherCode} condition={currentCondition} isDay={isDay} className="w-3.5 h-3.5" />
+          <span className="font-bold text-white">{currentTemp}°{currentUnit}</span>
+          <span className="text-[10px] text-cyan-200 font-medium">• {currentCity}</span>
         </div>
       </div>
     </div>
   );
 };
+

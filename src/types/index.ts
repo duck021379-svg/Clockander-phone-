@@ -38,6 +38,56 @@ export interface KeepNote {
   googleTaskId?: string;
 }
 
+export interface WeatherHourlyItem {
+  time: string; // "3 PM" or "15:00"
+  temp: number;
+  weatherCode: number;
+  condition: string;
+  pop: number; // precipitation probability %
+  isDay: boolean;
+}
+
+export interface WeatherDailyItem {
+  date: string;
+  dayName: string; // "Tue", "Wed"
+  maxTemp: number;
+  minTemp: number;
+  weatherCode: number;
+  condition: string;
+  pop: number;
+}
+
+export interface WeatherData {
+  city: string;
+  region?: string;
+  country?: string;
+  lat: number;
+  lon: number;
+  temp: number;
+  tempUnit: 'F' | 'C';
+  feelsLike: number;
+  tempHigh: number;
+  tempLow: number;
+  weatherCode: number;
+  condition: string;
+  isDay: boolean;
+  humidity: number;
+  windSpeed: number;
+  windDirection: number;
+  uvIndex: number;
+  precipitation: number;
+  precipitationProbability: number;
+  pressure: number;
+  aqi: number;
+  aqiCategory: 'Good' | 'Moderate' | 'Sensitive' | 'Unhealthy' | 'Hazardous';
+  sunrise: string;
+  sunset: string;
+  hourly: WeatherHourlyItem[];
+  daily: WeatherDailyItem[];
+  lastUpdated: number;
+  isLive: boolean;
+}
+
 export interface WidgetSettings {
   clockStyle: ClockStyle;
   is24Hour: boolean;
@@ -52,6 +102,13 @@ export interface WidgetSettings {
   isLocked: boolean; // desktop drag lock state
   weatherTemp: number;
   weatherCondition: string;
+  tempUnit?: 'F' | 'C';
+  weatherCity?: string;
+  weatherLat?: number;
+  weatherLon?: number;
+  showWeatherInGlance?: boolean;
+  weatherUseGps?: boolean;
+  weatherCustomOverride?: boolean;
   batteryLevel: number;
   wallpaper: WallpaperTheme;
   customWallpaperUrl?: string;
